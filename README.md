@@ -491,6 +491,7 @@ Importa el archivo `NTTData_Microservices.postman_collection.json` en Postman pa
 - [ ] Agregar retry policies para llamadas a Kafka
 - [ ] Implementar **Dead Letter Queue** para mensajes fallidos
 - [ ] Agregar timeouts configurables
+- [ ] Para mejorar la mantenibilidad y consistencia del sistema, el contrato OpenAPI se podria generar como un artefacto .jar y se publica en un repositorio privado. Este artefacto es consumido por los microservicios como dependencia
 
 ### API Gateway
 - [ ] Implementar **Spring Cloud Gateway**
