@@ -1,0 +1,154 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.3.5'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'org.openapi.generator' version '7.8.0'
+}
+
+group = 'com.nttdata'
+version = '0.0.1-SNAPSHOT'
+description = 'Customer Service for NTT Data'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	implementation 'org.springframework.boot:spring-boot-starter-data-r2dbc'
+	implementation 'org.postgresql:r2dbc-postgresql'
+	implementation 'io.projectreactor:reactor-core'
+	
+	// Kafka
+	implementation 'org.springframework.kafka:spring-kafka'
+	implementation 'io.projectreactor.kafka:reactor-kafka'
+	
+	// Flyway for schema migration
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-database-postgresql'
+	runtimeOnly 'org.postgresql:postgresql'
+	
+	// OpenAPI/Swagger
+	implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.6.0'
+	
+	// OpenAPI Generator
+	implementation 'org.openapitools:jackson-databind-nullable:0.2.6'
+	implementation 'io.swagger.core.v3:swagger-annotations:2.2.22'
+	implementation 'jakarta.validation:jakarta.validation-api:3.0.2'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+	implementation 'com.fasterxml.jackson.core:jackson-databind'
+	
+	// Lombok
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+	
+	// Logging
+	implementation 'org.springframework.boot:spring-boot-starter-logging'
+	
+	// Testing
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'io.projectreactor:reactor-test'
+	testImplementation 'org.springframework.kafka:spring-kafka-test'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testCompileOnly 'org.projectlombok:lombok'
+	testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+
+// OpenAPI Generator Configuration
+openApiGenerate {
+	generatorName = "spring"
+	inputSpec = "$rootDir/src/main/resources/openapi/customer-api.yaml".toString()
+	outputDir = "$buildDir/generated".toString()
+	apiPackage = "com.nttdata.customer.api"
+	modelPackage = "com.nttdata.customer.api.model"
+	invokerPackage = "com.nttdata.customer.api.invoker"
+	configOptions = [
+		reactive: "true",
+		interfaceOnly: "true",
+		skipDefaultInterface: "true",
+		useSpringBoot3: "true",
+		useTags: "true",
+		delegatePattern: "false",
+		useBeanValidation: "true",
+		performBeanValidation: "true",
+		useOptional: "false",
+		java8: "true",
+		dateLibrary: "java8",
+		serializableModel: "true",
+		hideGenerationTimestamp: "true"
+	]
+	additionalProperties = [
+		openApiNullable: "false"
+	]
+	typeMappings = [
+		DateTime: "java.time.OffsetDateTime"
+	]
+	importMappings = [
+		OffsetDateTime: "java.time.OffsetDateTime"
+	]
+}
+
+// Add generated sources to compilation
+sourceSets {
+	main {
+		java {
+			srcDir "$buildDir/generated/src/main/java"
+		}
+	}
+}
+
+// Generate code before compiling
+compileJava.dependsOn tasks.openApiGenerate
+
+// Pitest Mutation Testing Configuration
+configurations {
+	pitest
+}
+
+dependencies {
+	pitest 'org.pitest:pitest-command-line:1.15.3'
+	pitest 'org.pitest:pitest-junit5-plugin:1.2.1'
+}
+
+tasks.register('pitest', JavaExec) {
+	description = 'Run mutation testing with Pitest'
+	group = 'verification'
+	
+	dependsOn test, classes, testClasses
+	
+	mainClass = 'org.pitest.mutationtest.commandline.MutationCoverageReport'
+	classpath = configurations.pitest + sourceSets.main.runtimeClasspath + sourceSets.test.runtimeClasspath
+	
+	def pitestReportDir = layout.buildDirectory.dir('reports/pitest').get().asFile
+	
+	args = [
+		'--reportDir', pitestReportDir.absolutePath,
+		'--targetClasses', 'com.nttdata.customer.client.domain.*,com.nttdata.customer.client.application.*',
+		'--targetTests', 'com.nttdata.customer.client.*Test',
+		'--sourceDirs', file('src/main/java').absolutePath,
+		'--threads', '4',
+		'--outputFormats', 'HTML,XML',
+		'--verbose'
+	]
+	
+	doFirst {
+		pitestReportDir.mkdirs()
+		println "Running Pitest mutation testing..."
+		println "Report will be generated at: ${pitestReportDir.absolutePath}"
+	}
+	
+	doLast {
+		println "Pitest report available at: ${pitestReportDir.absolutePath}/index.html"
+	}
+}
